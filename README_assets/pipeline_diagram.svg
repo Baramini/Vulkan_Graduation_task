@@ -1,0 +1,106 @@
+<svg width="680" viewBox="0 0 680 980" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Vulkan GPU-Driven Rendering Pipeline</title>
+<desc>GPU-Driven 렌더링 파이프라인 전체 구조도. 보라색은 본인 구현, 회색은 팀원 구현.</desc>
+
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<!-- 배경 -->
+<rect width="680" height="980" fill="#f9f8f6"/>
+
+<!-- 범례 -->
+<rect x="40" y="24" width="12" height="12" rx="2" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="58" y="34" font-family="sans-serif" font-size="12" fill="#555550" dominant-baseline="central">본인 구현 / 自分で実装</text>
+<rect x="230" y="24" width="12" height="12" rx="2" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
+<text x="248" y="34" font-family="sans-serif" font-size="12" fill="#555550" dominant-baseline="central">팀원 구현 (구조 이해 및 활용) / チームメンバーの実装（構造を理解し活用）</text>
+
+<!-- ── CPU ── -->
+<rect x="40" y="56" width="600" height="72" rx="10" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
+<text x="340" y="83" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">CPU — Scene data</text>
+<text x="340" y="103" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">메시 정보 · 오브젝트 목록 · 카메라 행렬 준비</text>
+<text x="340" y="119" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">メッシュ情報・オブジェクト一覧・カメラ行列の準備</text>
+
+<line x1="340" y1="128" x2="340" y2="150" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- ── Batch System ── -->
+<rect x="40" y="152" width="600" height="128" rx="10" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
+<text x="340" y="176" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">GPU — Batch system</text>
+
+<rect x="58" y="192" width="168" height="74" rx="6" fill="#ffffff" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="142" y="218" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">UBO</text>
+<text x="142" y="236" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">Camera (set=0)</text>
+<text x="142" y="252" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">カメラ行列</text>
+
+<rect x="256" y="192" width="168" height="74" rx="6" fill="#ffffff" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="340" y="218" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">SSBO</text>
+<text x="340" y="236" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">Object / Texture ID (set=1)</text>
+<text x="340" y="252" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">オブジェクト・テクスチャID</text>
+
+<rect x="454" y="192" width="168" height="74" rx="6" fill="#ffffff" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="538" y="218" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">Bindless textures</text>
+<text x="538" y="236" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">Texture array (set=3)</text>
+<text x="538" y="252" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">バインドレステクスチャ配列</text>
+
+<line x1="340" y1="280" x2="340" y2="302" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- ── Culling RenderPass ── -->
+<rect x="40" y="304" width="600" height="84" rx="10" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
+<text x="340" y="330" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">Culling render pass</text>
+<text x="340" y="350" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">Shadow map 생성 · 프러스텀 컬링 · 불필요한 오브젝트 제거</text>
+<text x="340" y="368" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">シャドウマップ生成・フラスタムカリング・不要オブジェクトの除去</text>
+
+<line x1="340" y1="388" x2="340" y2="410" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- ── Vertex / Fragment ── -->
+<rect x="40" y="412" width="600" height="74" rx="10" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
+<text x="340" y="438" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">Vertex / Fragment shader</text>
+<text x="340" y="458" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">SSBO에서 텍스처 인덱스 참조 → Bindless texture 샘플링</text>
+<text x="340" y="474" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">SSBOからテクスチャインデックスを参照 → バインドレステクスチャサンプリング</text>
+
+<line x1="340" y1="486" x2="340" y2="508" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- ── Lighting Pass (본인) ── -->
+<rect x="40" y="510" width="600" height="112" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="1"/>
+<text x="340" y="536" font-family="sans-serif" font-size="14" font-weight="500" fill="#26215C" text-anchor="middle" dominant-baseline="central">Lighting pass</text>
+
+<rect x="58" y="554" width="268" height="54" rx="6" fill="#ffffff" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="192" y="575" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">Blinn-Phong shading</text>
+<text x="192" y="594" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">Blinn-Phongシェーディング</text>
+
+<rect x="354" y="554" width="268" height="54" rx="6" fill="#ffffff" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="488" y="575" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">Ambient · Diffuse · Specular</text>
+<text x="488" y="594" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">環境光・拡散光・鏡面反射</text>
+
+<line x1="340" y1="622" x2="340" y2="644" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- ── Post-Processing Pass (본인) ── -->
+<rect x="40" y="646" width="600" height="252" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="1"/>
+<text x="340" y="672" font-family="sans-serif" font-size="14" font-weight="500" fill="#26215C" text-anchor="middle" dominant-baseline="central">Post-Processing pass — 단일 패스 통합 / 単一パス統合</text>
+
+<rect x="58" y="690" width="564" height="60" rx="6" fill="#ffffff" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="340" y="712" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">① Bloom</text>
+<text x="340" y="730" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">pow(luminance, 4) + smoothstep → 고휘도 추출 → Gaussian blur 합산</text>
+<text x="340" y="744" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">高輝度領域の抽出 → ガウシアンブラーで加算合成</text>
+
+<line x1="340" y1="750" x2="340" y2="764" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+
+<rect x="58" y="766" width="564" height="60" rx="6" fill="#ffffff" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="340" y="787" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">② ACES Filmic Tone Mapping</text>
+<text x="340" y="805" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">HDR → LDR · pow(x, 1/2.2) 감마 보정 · 런타임 토글 가능</text>
+<text x="340" y="819" font-family="sans-serif" font-size="12" fill="#888780" text-anchor="middle" dominant-baseline="central">HDR→LDR変換・ガンマ補正・ランタイムトグル対応</text>
+
+<line x1="340" y1="826" x2="340" y2="840" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+
+<rect x="58" y="842" width="564" height="40" rx="6" fill="#ffffff" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="340" y="862" font-family="sans-serif" font-size="12" fill="#5F5E5A" text-anchor="middle" dominant-baseline="central">Culling pass의 Shadow map 결과를 입력으로 활용 / カリングパスのシャドウマップを入力として活用</text>
+
+<line x1="340" y1="898" x2="340" y2="918" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- ── Final Output ── -->
+<rect x="180" y="920" width="320" height="44" rx="10" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
+<text x="340" y="947" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">Final output</text>
+
+</svg>
