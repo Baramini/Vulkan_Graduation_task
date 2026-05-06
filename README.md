@@ -169,4 +169,4 @@ vkCmdDrawIndexedIndirect(cmd,
 
 ## 📎 관련 링크 / 関連リンク
 
-- [포트폴리오 사이트](#) — 렌더링 결과 영상 및 파이프라인 구조도 포함
+- [포트폴리오 사이트](https://baramini.github.io/PortfolioPage/) — 렌더링 결과 영상 및 파이프라인 구조도 포함
