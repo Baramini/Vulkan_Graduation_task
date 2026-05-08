@@ -5,7 +5,7 @@
 
 ---
 
-## 📌 프로젝트 개요 / プロジェクト概要
+## 프로젝트 개요 / プロジェクト概要
 
 본 레포지토리는 팀 졸업과제로 진행된 Vulkan 기반 GPU-Driven Renderer 프로젝트를 **개인 레포지토리로 이전한 것**입니다.  
 원본 프레임워크는 팀장의 레포지토리에서 fork하였으며, 이후 독립적인 레포지토리로 옮겼습니다.
@@ -22,7 +22,7 @@
 
 ---
 
-## ⚙️ 실행 방법 / セットアップ方法
+## 실행 방법 / セットアップ方法
 
 ### 사전 준비 / 事前準備
 
@@ -39,7 +39,7 @@
 
 ---
 
-## 🏗️ 파이프라인 구조 / パイプライン構造
+## 파이프라인 구조 / パイプライン構造
 
 아래는 전체 렌더링 파이프라인 구조입니다.  
 **보라색** 영역이 본인이 직접 구현한 부분입니다.
@@ -51,7 +51,7 @@
 
 ---
 
-## ✨ 구현 내용 / 実装内容
+## 구현 내용 / 実装内容
 
 ### 1. Lighting Pass — Blinn-Phong Shading
 
@@ -60,16 +60,26 @@ GPU-Driven 파이프라인의 구조를 파악한 뒤, **Lighting 파이프라�
 GPU駆動パイプラインの構造を把握した上で、**LightingパイプラインをFragment ShaderにてBlinn-Phong照明モデルで実装**しました。
 
 ```glsl
+// Blinn-Phong Lighting (Fragment Shader)
+vec3 lightDir   = normalize(u_ShaderSetting.lightPos.xyz - fragPos);
+vec3 viewDir    = normalize(cameraPos - fragPos);
+vec3 reflectDir = reflect(-lightDir, normal);
+
 // Bindless Texture — SSBO에서 오브젝트별 텍스처 인덱스 참조
+// Bindless Texture — SSBOからオブジェクトごとのテクスチャインデックスを参照
 int  textureIdx = nonuniformEXT(ssbo_TextureID.handle[inIndex].materialID);
 vec4 newColor   = textureLod(
     sampler2D(nonuniformEXT(u_DiffuseTextureList[textureIdx]), linearWrapSS),
     inFragTexcoord, 0);
 
-// Ambient / Diffuse / Specular
+// Ambient
 vec3 ambient  = u_ShaderSetting.ambientStrength * newColor.xyz;
+
+// Diffuse
 float diff    = max(dot(normal, lightDir), 0.0);
 vec3  diffuse = diff * u_ShaderSetting.lightColor.xyz * newColor.xyz;
+
+// Specular
 float spec    = pow(max(dot(viewDir, reflectDir), 0.0), u_ShaderSetting.shininess);
 vec3  specular = spec * u_ShaderSetting.specularStrength * u_ShaderSetting.lightColor.xyz;
 
@@ -91,24 +101,46 @@ Lighting Pass 결과를 입력으로 받아 **Bloom과 ACES Filmic Tone Mapping�
 Lightingパスの結果を入力として受け取り、**BloomとACESフィルミックトーンマッピングを単一パスで順次処理**します。
 
 ```glsl
-// ① 휘도 기반 Bloom 마스크
-float luminance = dot(color.rgb * shadowFactor, vec3(0.2126, 0.7152, 0.0722));
-luminance       = pow(luminance, 4.0);          // 대비 강화
-float bloomMask = smoothstep(0.8, 1.0, luminance);
-
-// ② Gaussian Blur + Bloom 합산
-vec3 blurred = gaussianBlurLit(inputColour, u_ShadowTexture, inFragTexcoord.xy);
-lit         += blurred * bloomMask * blurIntensity;
-
-// ③ ACES Filmic Tone Mapping (런타임 토글 가능)
+vec3 gaussianBlurLit(texture2D colTex, texture2D shTex, vec2 uv)
+{
+    vec2 d = 1.0 / vec2(textureSize(colTex, 0));
+    vec3 acc = vec3(0.0);
+    for (int i = -2; i <= 2; ++i) {
+        float wi = g5[i + 2];
+        for (int j = -2; j <= 2; ++j) {
+            float w = wi * g5[j + 2];
+            vec2  off = vec2(i, j) * d;
+            vec3  c   = textureLod(sampler2D(colTex, linearWrapSS), uv + off, 0).rgb;
+            float sh  = textureLod(sampler2D(shTex, linearWrapSS), uv + off, 0).r;
+            acc += c * sh * w;
+        }
+    }
+    return acc;
+}
 vec3 ACESFilm(vec3 x) {
     const float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14;
     return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
 }
+
+// 휘도 기반 Bloom 마스크 — pow로 대비 강화 후 smoothstep으로 부드럽게 추출
+// 輝度ベースBloomマスク — powでコントラストを強調後、smoothstepで滑らかに抽出
+float luminance = dot(color.rgb * shadowFactor, vec3(0.2126, 0.7152, 0.0722));
+luminance       = pow(luminance, 4.0);
+float bloomMask = smoothstep(0.8, 1.0, luminance);
+
+// Gaussian Blur (조명 반영) + Bloom 합산
+// Gaussian Blur（ライティング反映）+ Bloom加算
+vec3 blurred = gaussianBlurLit(inputColour, u_ShadowTexture, inFragTexcoord.xy);
+vec3 lit     = color.rgb * shadowFactor;
+lit         += blurred * bloomMask * blurIntensity;
+
+// 런타임 토글 가능
+// ランタイムでトグル可能
 if (u_ShaderSetting.isTonemapping != 0) {
     mapped = ACESFilm(lit * 0.6);
     mapped = pow(mapped, vec3(1.0 / 2.2)); // Gamma correction
 }
+outColour = vec4(mapped, 1.0);
 ```
 
 **어필 포인트 / ポイント**
@@ -130,11 +162,12 @@ if (u_ShaderSetting.isTonemapping != 0) {
 チームリーダーが設計した **BatchSystemとDescriptorSet分離構造**を把握し、その上にLightingパイプラインを構築しました。
 
 ```cpp
-// Descriptor Set을 갱신 빈도별로 분리 바인딩
-// set=0 : Camera UBO          — 프레임당 1회 갱신
-// set=1 : SSBO (Object/Batch) — 오브젝트별 데이터
-// set=2 : Sampler             — 고정
-// set=3 : Bindless Texture    — 인덱스로 직접 참조
+// Descriptor Set을 갱신 빈도별로 분리하여 바인딩
+// Descriptor Setを更新頻度ごとに分離してバインド
+// set=0 : Camera UBO          — 프레임당 1회 갱신 / フレームごとに1回更新
+// set=1 : SSBO (Object/Batch) — 오브젝트별 데이터 / オブジェクトごとのデータ
+// set=2 : Sampler             — 고정 / 固定
+// set=3 : Bindless Texture    — 인덱스로 직접 참조 / インデックスで直接参照
 
 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
     0, 1, &GetVkDescriptorSet("ViewProjection_ALL" + frameIdx), 0, nullptr);
@@ -146,6 +179,7 @@ vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
     3, 1, &GetVkDescriptorSet("DiffuseTextureList"), 0, nullptr);
 
 // GPU-Driven — CPU 개입 없이 GPU가 드로우 커맨드를 직접 소비
+// GPU-Driven — CPUを介さずGPUがドローコマンドを直接消費
 vkCmdDrawIndexedIndirect(cmd,
     g_BatchManager.m_indirectDrawCommandBuffer.buffer,
     miniBatch.m_indirectCommandsOffset,
@@ -155,7 +189,7 @@ vkCmdDrawIndexedIndirect(cmd,
 
 ---
 
-## 🛠️ 기술 스택 / 技術スタック
+## 기술 스택 / 技術スタック
 
 | 항목 / 項目 | 내용 / 内容 |
 |------|------|
@@ -166,7 +200,3 @@ vkCmdDrawIndexedIndirect(cmd,
 | Build | Visual Studio (Riche.sln) |
 
 ---
-
-## 📎 관련 링크 / 関連リンク
-
-- [포트폴리오 사이트](https://baramini.github.io/PortfolioPage/) — 렌더링 결과 영상 및 파이프라인 구조도 포함
