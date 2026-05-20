@@ -1,7 +1,7 @@
 # Vulkan GPU-Driven Rendering
 
-> 졸업 프로젝트 — GPU-Driven Rendering 파이프라인 위에 Lighting 및 Post-Processing 시스템 구현  
-> 卒業制作 — GPU駆動レンダリングパイプライン上にLightingおよびPost-Processingシステムを実装
+> 졸업 프로젝트 — GPU-Driven Rendering 파이프라인 위에 Lighting 및 Post-Processing 시스템, Imgui를 이용한 디버그UI 구현
+> 卒業制作 — GPU駆動レンダリングパイプライン上にLightingおよびPost-Processingシステム、Imguiを使用したデバッグUIの実装
 
 ---
 
@@ -18,7 +18,7 @@
 | 담당 / 担当 | 내용 / 内容 |
 |------|------|
 | **팀장 / チームリーダー** | 전체 프레임워크 설계, Batch System, Culling Render Pass, Shadow Map |
-| **본인 / 自分** | Lighting Pass (Blinn-Phong), Post-Processing Pass (Bloom + Tone Mapping) |
+| **본인 / 自分** | Lighting Pass, Post-Processing Pass, Debug UI |
 
 ---
 
@@ -34,6 +34,7 @@
 └── ThirdParty/
     └── meshoptimizer.zip   ← 해당 zip파일의 압축을 해제 / このzipファイルを解凍してください
 ```
+
 1. 압축을 해제합니다. / zipファイルを解凍します。
 2. Riche.sln을 실행하고 빌드합니다. / Riche.slnを開いてビルドします。
 
@@ -41,11 +42,9 @@
 
 ## 파이프라인 구조 / パイプライン構造
 
-아래는 전체 렌더링 파이프라인 구조입니다.  
-**보라색** 영역이 본인이 직접 구현한 부분입니다.
+아래는 전체 렌더링 파이프라인 구조입니다.
 
 以下は全体のレンダリングパイプライン構造です。  
-**紫色**の領域が自分で実装した部分です。
 
 ![Pipeline Diagram](README_assets/pipeline_diagram.svg)
 
@@ -56,136 +55,21 @@
 ### 1. Lighting Pass — Blinn-Phong Shading
 
 GPU-Driven 파이프라인의 구조를 파악한 뒤, **Lighting 파이프라인을 설계하고 Fragment Shader에서 Blinn-Phong 조명 모델을 구현**했습니다.
-
 GPU駆動パイプラインの構造を把握した上で、**LightingパイプラインをFragment ShaderにてBlinn-Phong照明モデルで実装**しました。
-
-```glsl
-// Blinn-Phong Lighting (Fragment Shader)
-vec3 lightDir   = normalize(u_ShaderSetting.lightPos.xyz - fragPos);
-vec3 viewDir    = normalize(cameraPos - fragPos);
-vec3 reflectDir = reflect(-lightDir, normal);
-
-// Bindless Texture — SSBO에서 오브젝트별 텍스처 인덱스 참조
-// Bindless Texture — SSBOからオブジェクトごとのテクスチャインデックスを参照
-int  textureIdx = nonuniformEXT(ssbo_TextureID.handle[inIndex].materialID);
-vec4 newColor   = textureLod(
-    sampler2D(nonuniformEXT(u_DiffuseTextureList[textureIdx]), linearWrapSS),
-    inFragTexcoord, 0);
-
-// Ambient
-vec3 ambient  = u_ShaderSetting.ambientStrength * newColor.xyz;
-
-// Diffuse
-float diff    = max(dot(normal, lightDir), 0.0);
-vec3  diffuse = diff * u_ShaderSetting.lightColor.xyz * newColor.xyz;
-
-// Specular
-float spec    = pow(max(dot(viewDir, reflectDir), 0.0), u_ShaderSetting.shininess);
-vec3  specular = spec * u_ShaderSetting.specularStrength * u_ShaderSetting.lightColor.xyz;
-
-outColour = vec4(ambient + diffuse + specular, newColor.a);
-```
-
-**어필 포인트 / ポイント**
-- Bindless Texture (`u_DiffuseTextureList[]`) + SSBO 기반 텍스처 인덱스 참조 구조를 이해하고 활용  
-  BindlessテクスチャとSSBOベースのテクスチャインデックス参照構造を理解し活用
-- `nonuniformEXT` qualifier로 GPU 분기 없이 오브젝트별 텍스처 샘플링  
-  `nonuniformEXT` qualifierによりGPU分岐なしにオブジェクトごとのテクスチャをサンプリング
 
 ---
 
 ### 2. Post-Processing Pass — Bloom + ACES Tone Mapping
 
 Lighting Pass 결과를 입력으로 받아 **Bloom과 ACES Filmic Tone Mapping을 단일 패스에서 순서대로 처리**합니다.
-
 Lightingパスの結果を入力として受け取り、**BloomとACESフィルミックトーンマッピングを単一パスで順次処理**します。
-
-```glsl
-vec3 gaussianBlurLit(texture2D colTex, texture2D shTex, vec2 uv)
-{
-    vec2 d = 1.0 / vec2(textureSize(colTex, 0));
-    vec3 acc = vec3(0.0);
-    for (int i = -2; i <= 2; ++i) {
-        float wi = g5[i + 2];
-        for (int j = -2; j <= 2; ++j) {
-            float w = wi * g5[j + 2];
-            vec2  off = vec2(i, j) * d;
-            vec3  c   = textureLod(sampler2D(colTex, linearWrapSS), uv + off, 0).rgb;
-            float sh  = textureLod(sampler2D(shTex, linearWrapSS), uv + off, 0).r;
-            acc += c * sh * w;
-        }
-    }
-    return acc;
-}
-vec3 ACESFilm(vec3 x) {
-    const float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14;
-    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
-}
-
-// 휘도 기반 Bloom 마스크 — pow로 대비 강화 후 smoothstep으로 부드럽게 추출
-// 輝度ベースBloomマスク — powでコントラストを強調後、smoothstepで滑らかに抽出
-float luminance = dot(color.rgb * shadowFactor, vec3(0.2126, 0.7152, 0.0722));
-luminance       = pow(luminance, 4.0);
-float bloomMask = smoothstep(0.8, 1.0, luminance);
-
-// Gaussian Blur (조명 반영) + Bloom 합산
-// Gaussian Blur（ライティング反映）+ Bloom加算
-vec3 blurred = gaussianBlurLit(inputColour, u_ShadowTexture, inFragTexcoord.xy);
-vec3 lit     = color.rgb * shadowFactor;
-lit         += blurred * bloomMask * blurIntensity;
-
-// 런타임 토글 가능
-// ランタイムでトグル可能
-if (u_ShaderSetting.isTonemapping != 0) {
-    mapped = ACESFilm(lit * 0.6);
-    mapped = pow(mapped, vec3(1.0 / 2.2)); // Gamma correction
-}
-outColour = vec4(mapped, 1.0);
-```
-
-**어필 포인트 / ポイント**
-- Reinhard 대신 **ACES Filmic** 선택 — 영화적 색감과 하이라이트 롤오프  
-  Reinhardの代わりに**ACES Filmic**を採用 — 映画的な色調とハイライトのロールオフ
-- `pow(luminance, 4.0)` + `smoothstep` 조합으로 Bloom 마스크 품질 향상  
-  `pow(luminance, 4.0)` + `smoothstep`の組み合わせでBloomマスクの品質を向上
-- Tone Mapping은 `isTonemapping` 플래그로 런타임 토글 가능 (디버깅 용이)  
-  トーンマッピングは`isTonemapping`フラグでランタイムトグル可能（デバッグ容易）
-- Culling Pass의 Shadow Map 결과를 Post-Processing 입력으로 활용 — 패스 간 연결 구조 이해  
-  Culling PassのShadow Map結果をPost-Processingの入力として活用 — パス間の接続構造を理解
 
 ---
 
-### 3. GPU-Driven 구조 이해 및 활용
+### 3. Debug UI — Imgui
 
-팀장이 설계한 **Batch System과 Descriptor Set 분리 구조**를 파악하고, 그 위에 Lighting 파이프라인을 올렸습니다.
-
-チームリーダーが設計した **BatchSystemとDescriptorSet分離構造**を把握し、その上にLightingパイプラインを構築しました。
-
-```cpp
-// Descriptor Set을 갱신 빈도별로 분리하여 바인딩
-// Descriptor Setを更新頻度ごとに分離してバインド
-// set=0 : Camera UBO          — 프레임당 1회 갱신 / フレームごとに1回更新
-// set=1 : SSBO (Object/Batch) — 오브젝트별 데이터 / オブジェクトごとのデータ
-// set=2 : Sampler             — 고정 / 固定
-// set=3 : Bindless Texture    — 인덱스로 직접 참조 / インデックスで直接参照
-
-vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-    0, 1, &GetVkDescriptorSet("ViewProjection_ALL" + frameIdx), 0, nullptr);
-vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-    1, 1, &GetVkDescriptorSet("BATCH_ALL" + frameIdx), 0, nullptr);
-vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-    2, 1, &GetVkDescriptorSet("SamplerList_ALL"), 0, nullptr);
-vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-    3, 1, &GetVkDescriptorSet("DiffuseTextureList"), 0, nullptr);
-
-// GPU-Driven — CPU 개입 없이 GPU가 드로우 커맨드를 직접 소비
-// GPU-Driven — CPUを介さずGPUがドローコマンドを直接消費
-vkCmdDrawIndexedIndirect(cmd,
-    g_BatchManager.m_indirectDrawCommandBuffer.buffer,
-    miniBatch.m_indirectCommandsOffset,
-    drawCount,
-    sizeof(VkDrawIndexedIndirectCommand));
-```
+Imgui를 이용해서 각종 **파라미터를 조절**하고 특정 **파이프라인을 On/Off**합니다.
+Imguiを使用して、各種パラメータを調整し、特定のパイプラインをオン／オフします。
 
 ---
 
