@@ -17,7 +17,7 @@
 
 | 담당 / 担当 | 내용 / 内容 |
 |------|------|
-| **팀장 / チームリーダー** | 전체 프레임워크 설계, Batch System, Culling Render Pass, Shadow Map |
+| **팀장 / チームリーダー** | Based framework design, Batch System, Culling Render Pass, Shadow Map |
 | **본인 / 自分** | Lighting Pass, Post-Processing Pass, Debug UI |
 
 ---
